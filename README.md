@@ -40,6 +40,7 @@ While moving a unit, pick an enemy in range to walk to the best tile and attack 
 - **Movement:** Dijkstra over per-terrain costs that vary by movement type (infantry, armored, cavalry, flier). Units can pass through allies but not enemies.
 - **Combat:** GBA-style formulas, including the weapon triangle (+15 hit, +1 damage), doubling when attack speed is 4+ higher, crits at 3x damage, and terrain defense and avoid. Hit rolls average two random numbers (the "true hit" system).
 - **Effective weapons:** bows deal triple might against fliers; the Rapier deals triple might against armored and cavalry units.
+- **Rescue:** move a unit onto an ally to pick them up. The carrier fights at half Skill and Speed, and the carried unit can't be targeted. Use **Drop** from the action menu to set them down on an adjacent tile. If the carrier falls, the carried unit is dropped where it stood.
 - **Healing:** staff healing, plus forts and the throne restore HP at the start of each phase.
 - **Progression:** EXP and level ups with per-stat growth rates. Death is permanent; the game is lost if Rowan dies.
 - **Enemy AI:** Charge, InRange, or Hold behavior. Attacks are scored by expected damage, kill chance, and counter risk.

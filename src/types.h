@@ -43,5 +43,6 @@ struct Unit {
     bool done = false, alive = true;
     bool isLord = false, isBoss = false;
     AIMode ai = AIMode::Charge;
+    int carrying = -1, carriedBy = -1;  // rescue: index of the ally this unit carries / is carried by
     float drawX = 0, drawY = 0;  // render position in tiles (differs from x/y while walking)
 };

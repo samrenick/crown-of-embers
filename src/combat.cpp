@@ -38,7 +38,18 @@ static SideStats sideStats(const Unit& u, const Unit& foe, const TerrainInfo& fo
     return s;
 }
 
-Forecast computeForecast(const Map& map, const Unit& a, int ax, int ay, const Unit& d) {
+// A unit carrying a rescued ally fights at half Skill and Speed.
+static Unit burdened(const Unit& u) {
+    Unit c = u;
+    if (u.carrying >= 0) {
+        c.stats.skl /= 2;
+        c.stats.spd /= 2;
+    }
+    return c;
+}
+
+Forecast computeForecast(const Map& map, const Unit& atk, int ax, int ay, const Unit& def) {
+    Unit a = burdened(atk), d = burdened(def);
     int dist = std::abs(ax - d.x) + std::abs(ay - d.y);
     Forecast f;
     f.atk = sideStats(a, d, terrainInfo(map.at(d.x, d.y)), dist);

@@ -145,7 +145,7 @@ void Game::reset() {
     }
     turn = 0;
     active = inspect = -1;
-    pendingAttack = -1;
+    pendingAttack = pendingRescue = -1;
     sceneActive = false;
     showDanger = false;
     popups.clear();
@@ -159,7 +159,7 @@ void Game::reset() {
 
 int Game::unitAt(int x, int y) const {
     for (size_t i = 0; i < units.size(); ++i)
-        if (units[i].alive && units[i].x == x && units[i].y == y) return static_cast<int>(i);
+        if (units[i].alive && units[i].carriedBy < 0 && units[i].x == x && units[i].y == y) return static_cast<int>(i);
     return -1;
 }
 
@@ -250,7 +250,7 @@ std::vector<int> Game::targetsFrom(int ui, int x, int y, ActionKind kind) const 
     std::vector<int> out;
     for (size_t i = 0; i < units.size(); ++i) {
         const Unit& t = units[i];
-        if (!t.alive || static_cast<int>(i) == ui) continue;
+        if (!t.alive || t.carriedBy >= 0 || static_cast<int>(i) == ui) continue;
         int d = manhattan(x, y, t.x, t.y);
         if (d < u.weapon.minRange || d > u.weapon.maxRange) continue;
         if (kind == ActionKind::Attack && u.weapon.type != WeaponType::Staff && t.team != u.team)
@@ -296,6 +296,41 @@ int Game::closestStandable(int ui, int x, int y) const {
     return best;
 }
 
+std::vector<int> Game::dropTiles(int ui) const {
+    std::vector<int> out;
+    const Unit& u = units[ui];
+    if (u.carrying < 0) return out;
+    static const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    for (const auto& d : dirs) {
+        int x = u.x + d[0], y = u.y + d[1];
+        if (map.inBounds(x, y) && unitAt(x, y) < 0 && moveCost(map.at(x, y), units[u.carrying].moveType) >= 0)
+            out.push_back(idx(x, y));
+    }
+    return out;
+}
+
+void Game::rescue(int carrier, int ally) {
+    units[carrier].carrying = ally;
+    units[ally].carriedBy = carrier;
+    units[ally].x = units[carrier].x;
+    units[ally].y = units[carrier].y;
+    addPopup(units[carrier].x, units[carrier].y, "Rescue!", {140, 220, 255, 255});
+    message = units[carrier].name + " rescues " + units[ally].name + ".";
+}
+
+void Game::drop(int carrier, int tile) {
+    int ally = units[carrier].carrying;
+    if (ally < 0) return;
+    Unit& a = units[ally];
+    a.carriedBy = -1;
+    a.x = tile % map.w;
+    a.y = tile / map.w;
+    a.drawX = static_cast<float>(a.x);
+    a.drawY = static_cast<float>(a.y);
+    a.done = true;  // a dropped unit has spent its turn
+    units[carrier].carrying = -1;
+}
+
 float Game::strikeImpact() const { return sceneActive ? kSceneImpact : kStrikeImpact; }
 float Game::strikeLength() const { return sceneActive ? kSceneStrike : 0.7f; }
 
@@ -326,6 +361,7 @@ void Game::beginPhase(Team t) {
     for (auto& u : units) {
         if (!u.alive || u.team != t) continue;
         u.done = false;
+        if (u.carriedBy >= 0) continue;
         int heal = terrainInfo(map.at(u.x, u.y)).heal;
         if (heal > 0 && u.hp < u.stats.hp) {
             int amt = std::min(std::max(1, u.stats.hp * heal / 100), u.stats.hp - u.hp);
@@ -356,7 +392,7 @@ void Game::afterAction() {
         return;
     }
     bool allDone = std::all_of(units.begin(), units.end(),
-                               [](const Unit& u) { return !u.alive || u.team != Team::Player || u.done; });
+                               [](const Unit& u) { return !u.alive || u.team != Team::Player || u.done || u.carriedBy >= 0; });
     if (allDone) beginPhase(Team::Enemy);
     else state = State::PlayerIdle;
 }
@@ -396,6 +432,11 @@ void Game::finishMove() {
             int e = pendingAttack;
             pendingAttack = -1;
             startCombat(active, e);
+        } else if (pendingRescue >= 0) {
+            rescue(active, pendingRescue);
+            pendingRescue = -1;
+            units[active].done = true;
+            afterAction();
         } else {
             openActionMenu();
         }
@@ -415,6 +456,7 @@ void Game::openActionMenu() {
     menu.clear();
     if (!targetsFrom(active, u.x, u.y, ActionKind::Attack).empty()) menu.push_back("Attack");
     if (!targetsFrom(active, u.x, u.y, ActionKind::Heal).empty()) menu.push_back("Heal");
+    if (!dropTiles(active).empty()) menu.push_back("Drop");
     menu.push_back("Wait");
     menuIndex = 0;
     menuKind = MenuKind::Action;
@@ -541,6 +583,15 @@ void Game::endCombat() {
         bool aDead = a.hp <= 0, dDead = d.hp <= 0;
         if (a.team == Team::Player && !aDead) gainExp(combatA, expFor(a, d, landed[0], dDead));
         if (d.team == Team::Player && !dDead) gainExp(combatD, expFor(d, a, landed[1], aDead));
+        for (int ui : {combatA, combatD}) {
+            Unit& u = units[ui];
+            if (u.hp <= 0 && u.carrying >= 0) {
+                units[u.carrying].carriedBy = -1;
+                units[u.carrying].drawX = static_cast<float>(u.x);
+                units[u.carrying].drawY = static_cast<float>(u.y);
+                u.carrying = -1;
+            }
+        }
         if (aDead) {
             a.alive = false;
             message = a.name + " has fallen.";
@@ -751,7 +802,7 @@ void Game::updatePlayerIdle(const Input& in) {
         if (from < 0) from = in.cycle > 0 ? n - 1 : 0;
         for (int k = 1; k <= n; ++k) {
             const Unit& u = units[((from + in.cycle * k) % n + n) % n];
-            if (u.alive && u.team == Team::Player && !u.done) {
+            if (u.alive && u.team == Team::Player && !u.done && u.carriedBy < 0) {
                 cursorX = u.x;
                 cursorY = u.y;
                 break;
@@ -780,7 +831,13 @@ void Game::updateSelected(const Input& in) {
     bool canStrike = foe >= 0 && units[foe].team != units[active].team && attackMask[t] &&
                      units[active].weapon.type != WeaponType::Staff;
     int strikeTile = canStrike ? bestAttackTile(active, foe) : -1;
-    int dest = strikeTile >= 0 ? strikeTile : standable(active, reach, t) ? t : closestStandable(active, cursorX, cursorY);
+    // Moving onto a reachable ally picks them up (neither may already be carrying someone).
+    bool canRescue = foe >= 0 && foe != active && units[foe].team == units[active].team && reach.cost[t] >= 0 &&
+                     units[active].carrying < 0 && units[foe].carrying < 0;
+    int dest = strikeTile >= 0 ? strikeTile
+               : canRescue     ? t
+               : standable(active, reach, t) ? t
+                                             : closestStandable(active, cursorX, cursorY);
     if (dest >= 0) path = pathTo(reach, dest);
     if (in.cancel) {
         cursorX = origX;
@@ -789,6 +846,9 @@ void Game::updateSelected(const Input& in) {
         state = State::PlayerIdle;
     } else if (in.confirm && strikeTile >= 0) {
         pendingAttack = foe;
+        startMove(active, path, false);
+    } else if (in.confirm && canRescue) {
+        pendingRescue = foe;
         startMove(active, path, false);
     } else if (in.confirm && dest >= 0) {
         startMove(active, path, false);
@@ -824,7 +884,14 @@ void Game::updateMenu(const Input& in) {
     if (!in.confirm || (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !mouseInMenu)) return;
 
     const std::string& choice = menu[menuIndex];
-    if (choice == "Attack" || choice == "Heal") {
+    if (choice == "Drop") {
+        actionKind = ActionKind::Drop;
+        targets = dropTiles(active);
+        targetIndex = 0;
+        cursorX = targets[0] % map.w;
+        cursorY = targets[0] / map.w;
+        state = State::Target;
+    } else if (choice == "Attack" || choice == "Heal") {
         actionKind = choice == "Attack" ? ActionKind::Attack : ActionKind::Heal;
         targets = targetsFrom(active, units[active].x, units[active].y, actionKind);
         targetIndex = 0;
@@ -848,19 +915,28 @@ void Game::updateTarget(const Input& in) {
     int n = static_cast<int>(targets.size());
     int step = in.dx + in.dy;
     if (step) targetIndex = (targetIndex + (step > 0 ? 1 : -1) + n) % n;
+    // Targets are unit indices, except for Drop where they're tiles.
+    bool tiles = actionKind == ActionKind::Drop;
+    auto tx = [&](int i) { return tiles ? targets[i] % map.w : units[targets[i]].x; };
+    auto ty = [&](int i) { return tiles ? targets[i] / map.w : units[targets[i]].y; };
     if (in.mouseMoved) {
         for (int i = 0; i < n; ++i)
-            if (units[targets[i]].x == in.mx && units[targets[i]].y == in.my) targetIndex = i;
+            if (tx(i) == in.mx && ty(i) == in.my) targetIndex = i;
     }
-    cursorX = units[targets[targetIndex]].x;
-    cursorY = units[targets[targetIndex]].y;
+    cursorX = tx(targetIndex);
+    cursorY = ty(targetIndex);
     if (in.cancel) {
         cursorX = units[active].x;
         cursorY = units[active].y;
         openActionMenu();
     } else if (in.confirm) {
         if (actionKind == ActionKind::Attack) startCombat(active, targets[targetIndex]);
-        else startHeal(active, targets[targetIndex]);
+        else if (actionKind == ActionKind::Heal) startHeal(active, targets[targetIndex]);
+        else {
+            drop(active, targets[targetIndex]);
+            units[active].done = true;
+            afterAction();
+        }
     }
 }
 
@@ -868,6 +944,10 @@ void Game::update(float dt) {
     Input in = autoplay ? Input{} : readInput();
 
     for (size_t i = 0; i < units.size(); ++i) {
+        if (units[i].carriedBy >= 0) {  // ride along with the carrier
+            units[i].x = units[units[i].carriedBy].x;
+            units[i].y = units[units[i].carriedBy].y;
+        }
         if (state == State::Moving && static_cast<int>(i) == active) continue;
         units[i].drawX = static_cast<float>(units[i].x);
         units[i].drawY = static_cast<float>(units[i].y);
@@ -1018,7 +1098,11 @@ void Game::drawHighlights() const {
         fillMask(outer, heals ? kHealColor : kAttackColor, 0.4f);
     }
 
-    if (state == State::Target) {
+    if (state == State::Target && actionKind == ActionKind::Drop) {
+        std::vector<char> spots(map.w * map.h, 0);
+        for (int t : targets) spots[t] = 1;
+        fillMask(spots, kMoveColor, 0.45f);
+    } else if (state == State::Target) {
         std::vector<char> range(map.w * map.h, 0);
         const Unit& u = units[active];
         for (int t = 0; t < map.w * map.h; ++t) {
@@ -1121,7 +1205,7 @@ bool Game::drawUnitSprite(int ui, Vector2 feet, float scale, bool faceLeft, Colo
 void Game::drawUnits() const {
     for (size_t i = 0; i < units.size(); ++i) {
         const Unit& u = units[i];
-        if (!u.alive) continue;
+        if (!u.alive || u.carriedBy >= 0) continue;
         Vector2 c = tileCenter(u.drawX, u.drawY);
 
         // Lunge toward the opponent during the strike wind-up.
@@ -1169,6 +1253,13 @@ void Game::drawUnits() const {
                 DrawTriangle({c.x + 4, top + 6}, {c.x + 10, top + 8}, {c.x + 10, top}, GOLD);
             }
             drawHpBar(c.x - 18, c.y + 19, 36, 4, u.hp, u.stats.hp);
+            if (u.carrying >= 0) {  // rescue badge: a small team-colored tag with the carried unit's initial
+                Rectangle tag{c.x + 10, c.y - 26, 14, 14};
+                DrawRectangleRec(tag, u.team == Team::Player ? kPlayerColor : kEnemyColor);
+                DrawRectangleLinesEx(tag, 1.5f, WHITE);
+                char initial[2] = {units[u.carrying].name[0], 0};
+                drawTextCentered(initial, static_cast<int>(tag.x + 7), static_cast<int>(tag.y + 2), 10, WHITE);
+            }
             continue;
         }
 
@@ -1276,10 +1367,19 @@ void Game::drawUnitInfo(const Unit& u, int x, int y) const {
         else DrawText(TextFormat("Rng %d-%d", w.minRange, w.maxRange), x, wy + 42, 16, kDim);
         if (w.effective) DrawText("Effective bonus", x + 80, wy + 42, 16, {255, 170, 90, 255});
     }
+    if (u.carrying >= 0)
+        DrawText(TextFormat("Carrying %s (Skl/Spd halved)", units[u.carrying].name.c_str()), x, wy + 66, 16,
+                 {140, 220, 255, 255});
 }
 
 void Game::drawForecast(int x, int y) const {
     const Unit& a = units[active];
+    if (actionKind == ActionKind::Drop) {
+        DrawText("DROP", x, y, 18, {255, 220, 120, 255});
+        if (a.carrying >= 0) DrawText(units[a.carrying].name.c_str(), x, y + 34, 22, {130, 175, 255, 255});
+        DrawText("Choose a tile to set them down", x, y + 64, 16, kDim);
+        return;
+    }
     const Unit& d = units[targets[targetIndex]];
     DrawText(actionKind == ActionKind::Heal ? "HEAL" : "COMBAT FORECAST", x, y, 18, {255, 220, 120, 255});
     if (actionKind == ActionKind::Heal) {
@@ -1355,7 +1455,7 @@ void Game::drawBottomBar() const {
     const char* help = "";
     switch (state) {
         case State::PlayerIdle: help = "Arrows/WASD/Mouse: move   Z/Enter/Click: select   X: cancel   R: danger zone   T: battle scenes"; break;
-        case State::Selected: help = "Choose a destination (or an enemy to attack it)   Z: move   X: cancel"; break;
+        case State::Selected: help = "Choose a destination, an enemy to attack, or an ally to rescue   Z: move   X: cancel"; break;
         case State::Combat: help = sceneActive ? "Hold Z: fast-forward" : ""; break;
         case State::Menu: help = "Up/Down: choose   Z: confirm   X: back"; break;
         case State::Target: help = "Arrows: cycle targets   Z: confirm   X: back"; break;

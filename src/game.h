@@ -30,7 +30,7 @@ public:
 private:
     enum class State { Banner, PlayerIdle, Selected, Moving, Menu, Target, Combat, LevelUp, AITurn, Victory, Defeat };
     enum class MenuKind { Action, Map };
-    enum class ActionKind { Attack, Heal };
+    enum class ActionKind { Attack, Heal, Drop };
 
     struct Reach {
         std::vector<int> cost, prev;  // cost -1 = unreachable
@@ -72,6 +72,7 @@ private:
     Rectangle menuRect() const;
     int bestAttackTile(int ui, int target) const;
     int closestStandable(int ui, int x, int y) const;
+    std::vector<int> dropTiles(int ui) const;
     float strikeImpact() const;  // seconds into a strike when damage lands
     float strikeLength() const;
 
@@ -85,6 +86,8 @@ private:
     void openMapMenu();
     void startCombat(int a, int d);
     void startHeal(int h, int t);
+    void rescue(int carrier, int ally);
+    void drop(int carrier, int tile);
     void applyStrike(const Strike& s);
     void endCombat();
     int expFor(const Unit& u, const Unit& foe, bool landedHit, bool killed) const;
@@ -167,6 +170,7 @@ private:
     int targetIndex = 0;
 
     int pendingAttack = -1;  // enemy to attack as soon as the current player move finishes
+    int pendingRescue = -1;  // ally to pick up as soon as the current player move finishes
     bool battleScenes = true;  // show the GBA-style battle screen for attacks
     bool sceneActive = false;  // the current combat is using it
     float sceneT = 0;          // seconds since the battle scene opened
