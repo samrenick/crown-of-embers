@@ -11,6 +11,13 @@ make run
 
 (There's also a `CMakeLists.txt` if you prefer CMake 3.16+.)
 
+To get a double-clickable macOS app instead:
+
+```sh
+make app       # builds "build/Fire Emblem.app" (raylib built in, so it runs without Homebrew)
+make install   # copies it into /Applications
+```
+
 Debug flags:
 
 - `./build/fe --autoplay --speed 20` — AI plays both sides; prints the result and exits

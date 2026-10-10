@@ -38,11 +38,13 @@ float frameTime(const std::string& anim) {
 }
 
 std::string findAsset(const std::string& file) {
-    // Look next to the working directory first (make run), then beside the binary (build/fe).
-    std::string path = "assets/sprites/" + file;
-    if (FileExists(path.c_str())) return path;
-    path = std::string(GetApplicationDirectory()) + "../assets/sprites/" + file;
-    return FileExists(path.c_str()) ? path : "";
+    // Look next to the working directory first (make run), then beside the binary (build/fe),
+    // then inside a macOS app bundle (Contents/MacOS/fe -> Contents/Resources/assets).
+    std::string dir = GetApplicationDirectory();
+    for (std::string path : {"assets/sprites/" + file, dir + "../assets/sprites/" + file,
+                             dir + "../Resources/assets/sprites/" + file})
+        if (FileExists(path.c_str())) return path;
+    return "";
 }
 
 bool pressed(int key) { return IsKeyPressed(key) || IsKeyPressedRepeat(key); }
