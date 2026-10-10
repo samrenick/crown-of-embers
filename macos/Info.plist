@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Fire Emblem</string>
+    <string>Crown of Embers</string>
     <key>CFBundleDisplayName</key>
-    <string>Fire Emblem</string>
+    <string>Crown of Embers</string>
     <key>CFBundleIdentifier</key>
-    <string>com.samrenick.fire-emblem-clone</string>
+    <string>com.samrenick.crown-of-embers</string>
     <key>CFBundleExecutable</key>
     <string>fe</string>
     <key>CFBundleIconFile</key>

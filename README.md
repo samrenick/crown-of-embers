@@ -1,4 +1,4 @@
-# Fire Emblem Clone
+# Crown of Embers
 
 A small grid-based tactics game in C++17 with [raylib](https://www.raylib.com/).
 
@@ -14,7 +14,7 @@ make run
 To get a double-clickable macOS app instead:
 
 ```sh
-make app       # builds "build/Fire Emblem.app" (raylib built in, so it runs without Homebrew)
+make app       # builds "build/Crown of Embers.app" (raylib built in, so it runs without Homebrew)
 make install   # copies it into /Applications
 ```
 

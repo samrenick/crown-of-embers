@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(fire_emblem CXX)
+project(crown_of_embers CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -18,7 +18,7 @@ run: build/fe
 	./build/fe
 
 # macOS app bundle with raylib linked statically, so it runs without Homebrew.
-APP := build/Fire Emblem.app
+APP := build/Crown of Embers.app
 RAYLIB_A := $(shell pkg-config --variable=libdir raylib)/libraylib.a
 
 app: $(OBJ)
@@ -32,7 +32,7 @@ app: $(OBJ)
 	codesign --force --deep -s - "$(APP)"
 
 install: app
-	rm -rf "/Applications/Fire Emblem.app"
+	rm -rf "/Applications/Crown of Embers.app"
 	cp -R "$(APP)" /Applications/
 
 clean:

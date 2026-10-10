@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
 
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
     SetTraceLogLevel(LOG_WARNING);
-    InitWindow(SCREEN_W, SCREEN_H, "Fire Emblem Clone");
+    InitWindow(SCREEN_W, SCREEN_H, "Crown of Embers");
     SetExitKey(KEY_NULL);
     SetTargetFPS(60);
     SetWindowMinSize(SCREEN_W / 2, SCREEN_H / 2);
