@@ -1,6 +1,7 @@
 # cell width, height, anchor x, feet y (px within a cell)
 cell 115 128 56 126
-idle 8
+# frames 4-7 crouch noticeably shorter, which reads as the sprite shrinking
+idle 8 @0,1,2,3
 walk 4
 attack 4 1
 hurt 3

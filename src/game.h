@@ -14,14 +14,15 @@ constexpr int SCREEN_H = MAP_H * TILE + BAR_H;
 
 class Game {
 public:
-    explicit Game(bool autoplay);
+    Game(bool autoplay, int startChapter = 0);
     ~Game();
     Game(const Game&) = delete;
     Game& operator=(const Game&) = delete;
     void update(float dt);
     void draw() const;
 
-    bool over() const { return state == State::Victory || state == State::Defeat; }
+    // The run is over on defeat or after clearing the last chapter; earlier victories lead to the next chapter.
+    bool over() const { return state == State::Defeat || (state == State::Victory && chapter + 1 == kChapterCount); }
     bool won() const { return state == State::Victory; }
     int turnNumber() const { return turn; }
     // Seconds into the current battle scene, or -1 when none is showing (used for debug screenshots).
@@ -55,7 +56,9 @@ private:
         Stats gains;
     };
 
-    void reset();
+    void newCampaign(int startChapter);
+    void startChapter();  // (re)starts the current chapter with the army in `roster`
+    void advanceChapter();
     void loadSprites();
 
     // queries
@@ -109,7 +112,8 @@ private:
     void drawTile(int x, int y) const;
     void drawHighlights() const;
     void drawUnits() const;
-    bool drawUnitSprite(int ui, Vector2 feet, float scale, bool faceLeft, Color tint) const;
+    // battle: draw from the crisp (nearest-pixel) texture at the sprite's battle size.
+    bool drawUnitSprite(int ui, Vector2 feet, float scale, bool faceLeft, Color tint, bool battle = false) const;
     void drawBattleScene() const;
     void drawCursor() const;
     void drawMenu() const;
@@ -123,10 +127,13 @@ private:
 
     struct Anim {
         int row, frames;
-        int hit = -1;  // attack only: frame shown when damage lands; frames before it stretch to fit the wind-up
+        int hit = -1;           // attack only: frame shown when damage lands; frames before it stretch to fit the wind-up
+        std::vector<int> cols;  // atlas columns to play, in order; empty = 0..frames-1
     };
     struct Sprite {
-        Texture2D tex;
+        Texture2D tex;          // mipmapped and smoothed, for the small map sprites
+        Texture2D battleTex;    // nearest-pixel, for the enlarged battle scene
+        float battleScale = 1;  // extra size in battle scenes (mounted units stand taller than infantry)
         bool facesLeft;  // art drawn facing left; flipped so player units face right
         // Cell layout within tex, in texture pixels. A static sprite is one cell covering the whole texture.
         int cellW = 0, cellH = 0, anchorX = 0, feetY = 0;
@@ -142,7 +149,9 @@ private:
 
     Map map;
     std::vector<Unit> units;
-    std::string objective;
+    std::string objective, chapterName;
+    int chapter = 0;
+    std::vector<Unit> roster;  // surviving player army as of the start of the current chapter
     std::mt19937 rng;
     bool autoplay;
 

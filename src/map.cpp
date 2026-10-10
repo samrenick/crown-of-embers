@@ -8,6 +8,8 @@ static const TerrainInfo kTerrain[] = {
     {"Wall",     0, 0,  0,  {96, 96, 108, 255}},
     {"Fort",     2, 20, 20, {176, 152, 112, 255}},
     {"Throne",   3, 30, 20, {150, 116, 160, 255}},
+    {"Road",     0, 0,  0,  {150, 142, 126, 255}},
+    {"Rubble",   1, 10, 0,  {128, 118, 104, 255}},
 };
 
 // Columns: Infantry, Armored, Cavalry, Flier
@@ -19,6 +21,8 @@ static const int kMoveCost[][4] = {
     {-1, -1, -1, -1}, // Wall
     {2, 2, 2, 1},     // Fort
     {1, 1, 1, 1},     // Throne
+    {1, 1, 1, 1},     // Road
+    {2, 2, 3, 1},     // Rubble
 };
 
 const TerrainInfo& terrainInfo(Terrain t) { return kTerrain[static_cast<int>(t)]; }
@@ -40,6 +44,8 @@ Map Map::fromStrings(const std::vector<std::string>& rows) {
                 case '#': m.tiles.push_back(Terrain::Wall); break;
                 case 'F': m.tiles.push_back(Terrain::Fort); break;
                 case 'T': m.tiles.push_back(Terrain::Throne); break;
+                case '=': m.tiles.push_back(Terrain::Road); break;
+                case 'r': m.tiles.push_back(Terrain::Rubble); break;
                 default:  m.tiles.push_back(Terrain::Plain); break;
             }
         }

@@ -6,6 +6,7 @@
 #include <fstream>
 #include <queue>
 #include <sstream>
+#include <tuple>
 
 namespace {
 
@@ -80,13 +81,16 @@ const char* weaponTypeName(WeaponType t) {
 // Setup and queries
 // ---------------------------------------------------------------------------
 
-Game::Game(bool autoplay) : rng(std::random_device{}()), autoplay(autoplay) {
+Game::Game(bool autoplay, int startChapter) : rng(std::random_device{}()), autoplay(autoplay) {
     loadSprites();
-    reset();
+    newCampaign(startChapter);
 }
 
 Game::~Game() {
-    for (auto& [name, sprite] : sprites) UnloadTexture(sprite.tex);
+    for (auto& [name, sprite] : sprites) {
+        UnloadTexture(sprite.tex);
+        UnloadTexture(sprite.battleTex);
+    }
 }
 
 void Game::loadSprites() {
@@ -111,11 +115,15 @@ void Game::loadSprites() {
         sp.facesLeft = meta.empty() && facesLeft;  // facesLeft describes the still; atlases are built facing right
         GenTextureMipmaps(&sp.tex);
         SetTextureFilter(sp.tex, TEXTURE_FILTER_TRILINEAR);
+        sp.battleTex = LoadTexture(png.c_str());
+        SetTextureFilter(sp.battleTex, TEXTURE_FILTER_POINT);
         sp.cellW = sp.tex.width;
         sp.cellH = sp.feetY = sp.tex.height;
         sp.anchorX = sp.tex.width / 2;
         if (!meta.empty()) {
-            // Format: "cell <w> <h> <anchorX> <feetY>", then one "<anim> <frames> [hitFrame]" line per atlas row.
+            // Format: "cell <w> <h> <anchorX> <feetY>", optional "scale <battleScale>", then one line per atlas row:
+            // "<anim> <frames> [hitFrame] [@col,col,...]". The @ list picks which columns play (hitFrame indexes
+            // into it). A leading '-' on the name skips that row.
             std::ifstream in(meta);
             std::string line;
             int row = 0;
@@ -125,10 +133,24 @@ void Game::loadSprites() {
                 if (!(ls >> key) || key[0] == '#') continue;
                 if (key == "cell") {
                     ls >> sp.cellW >> sp.cellH >> sp.anchorX >> sp.feetY;
+                } else if (key == "scale") {
+                    ls >> sp.battleScale;
+                } else if (key[0] == '-') {
+                    ++row;
                 } else {
-                    int frames = 0, hit = -1;
-                    ls >> frames >> hit;
-                    sp.anims[key] = {row++, frames, hit};
+                    Anim a{row++, 0, -1, {}};
+                    std::string tok;
+                    ls >> a.frames;
+                    while (ls >> tok) {
+                        if (tok[0] != '@') {
+                            a.hit = std::stoi(tok);
+                            continue;
+                        }
+                        std::istringstream cs(tok.substr(1));
+                        for (std::string col; std::getline(cs, col, ',');) a.cols.push_back(std::stoi(col));
+                    }
+                    if (!a.cols.empty()) a.frames = static_cast<int>(a.cols.size());
+                    sp.anims[key] = a;
                 }
             }
         }
@@ -136,11 +158,41 @@ void Game::loadSprites() {
     }
 }
 
-void Game::reset() {
-    Level lv = makeLevel();
+void Game::newCampaign(int startChapter) {
+    roster = startingRoster();
+    chapter = std::clamp(startChapter, 0, kChapterCount - 1);
+    this->startChapter();
+}
+
+void Game::advanceChapter() {
+    // Survivors carry over with their levels and EXP, healed and set down.
+    std::vector<Unit> next;
+    for (const Unit& u : units) {
+        if (u.team != Team::Player || !u.alive) continue;
+        Unit s = u;
+        s.hp = s.stats.hp;
+        s.done = false;
+        s.carrying = s.carriedBy = -1;
+        next.push_back(s);
+    }
+    roster = next;
+    ++chapter;
+    startChapter();
+}
+
+void Game::startChapter() {
+    Level lv = makeLevel(chapter);
     map = lv.map;
-    units = lv.units;
     objective = lv.objective;
+    chapterName = lv.name;
+    units.clear();
+    for (size_t i = 0; i < roster.size() && i < lv.starts.size(); ++i) {
+        Unit u = roster[i];
+        u.x = lv.starts[i].first;
+        u.y = lv.starts[i].second;
+        units.push_back(u);
+    }
+    units.insert(units.end(), lv.units.begin(), lv.units.end());
     for (auto& u : units) {
         u.drawX = static_cast<float>(u.x);
         u.drawY = static_cast<float>(u.y);
@@ -1009,8 +1061,13 @@ void Game::update(float dt) {
             break;
         case State::AITurn: updateAI(dt); break;
         case State::Victory:
+            if (in.confirm || (autoplay && !over())) {
+                if (chapter + 1 < kChapterCount) advanceChapter();
+                else newCampaign(0);
+            }
+            break;
         case State::Defeat:
-            if (in.confirm) reset();
+            if (in.confirm) startChapter();
             break;
     }
 }
@@ -1065,6 +1122,21 @@ void Game::drawTile(int x, int y) const {
         case Terrain::Throne:
             DrawRectangleRec({px + 14, py + 6, 20, 24}, {200, 160, 50, 255});
             DrawRectangleRec({px + 10, py + 24, 28, 16}, {170, 40, 60, 255});
+            break;
+        case Terrain::Road:
+            for (int row = 0; row < 3; ++row) {
+                float off = row % 2 ? 8.0f : 0.0f;
+                for (float bx = off; bx < TILE; bx += 16)
+                    DrawRectangleLinesEx({px + bx, py + row * 16.0f, 16, 16}, 1, {132, 124, 108, 255});
+            }
+            break;
+        case Terrain::Rubble:
+            for (auto [ox, oy, r] : {std::tuple{12.0f, 30.0f, 8.0f}, std::tuple{30.0f, 34.0f, 6.0f},
+                                     std::tuple{26.0f, 16.0f, 7.0f}, std::tuple{38.0f, 12.0f, 4.0f}}) {
+                DrawPoly({px + ox, py + oy}, 5, r, ox * 7, {104, 96, 88, 255});
+                DrawPoly({px + ox - 1, py + oy - 2}, 5, r * 0.6f, ox * 7, {150, 140, 128, 255});
+            }
+            DrawLineEx({px + 6, py + 14}, {px + 18, py + 10}, 3, {96, 70, 50, 255});  // broken beam
             break;
     }
     DrawRectangleLinesEx({px, py, TILE, TILE}, 1, Fade(BLACK, 0.08f));
@@ -1163,7 +1235,7 @@ bool Game::facingLeft(int ui) const {
     return u.team == Team::Enemy;
 }
 
-bool Game::drawUnitSprite(int ui, Vector2 feet, float scale, bool faceLeft, Color tint) const {
+bool Game::drawUnitSprite(int ui, Vector2 feet, float scale, bool faceLeft, Color tint, bool battle) const {
     auto sprite = sprites.find(units[ui].className);
     if (sprite == sprites.end()) return false;
     const Sprite& sp = sprite->second;
@@ -1187,19 +1259,21 @@ bool Game::drawUnitSprite(int ui, Vector2 feet, float scale, bool faceLeft, Colo
         if (loop) f %= a.frames;
         else if (f >= a.frames && pick.name == std::string("death")) f = a.frames - 1;
         else if (f >= a.frames) anim = sp.anims.end();  // finished: drop back to idle
-        if (anim != sp.anims.end()) row = a.row, col = f;
+        if (anim != sp.anims.end()) row = a.row, col = a.cols.empty() ? f : a.cols[f];
     }
     if (anim == sp.anims.end() && sp.anims.count("idle")) {
         const Anim& a = sp.anims.at("idle");
         float t = static_cast<float>(GetTime()) + ui * 0.37f;
+        int f = static_cast<int>(t / frameTime("idle")) % a.frames;
         row = a.row;
-        col = static_cast<int>(t / frameTime("idle")) % a.frames;
+        col = a.cols.empty() ? f : a.cols[f];
     }
+    if (battle) scale *= sp.battleScale;
 
     bool flip = faceLeft != sp.facesLeft;
     float cw = static_cast<float>(sp.cellW), ch = static_cast<float>(sp.cellH);
     float ax = flip ? cw - sp.anchorX : static_cast<float>(sp.anchorX);
-    DrawTexturePro(sp.tex, {col * cw, row * ch, flip ? -cw : cw, ch},
+    DrawTexturePro(battle ? sp.battleTex : sp.tex, {col * cw, row * ch, flip ? -cw : cw, ch},
                    {feet.x - ax * scale, feet.y - sp.feetY * scale, cw * scale, ch * scale}, {0, 0}, 0, tint);
     return true;
 }
@@ -1462,8 +1536,8 @@ void Game::drawBottomBar() const {
         case State::Menu: help = "Up/Down: choose   Z: confirm   X: back"; break;
         case State::Target: help = "Arrows: cycle targets   Z: confirm   X: back"; break;
         case State::LevelUp: help = "Z: continue"; break;
-        case State::Victory:
-        case State::Defeat: help = "Z/Enter: play again"; break;
+        case State::Victory: help = over() ? "Z/Enter: play again" : "Z/Enter: next chapter"; break;
+        case State::Defeat: help = "Z/Enter: retry chapter"; break;
         default: break;
     }
     DrawText(help, 16, y + 10, 18, kDim);
@@ -1570,13 +1644,13 @@ void Game::drawBattleScene() const {
         bool deathAnim = sp != sprites.end() && sp->second.anims.count("death");
         if (u.hp <= 0 && !deathAnim) alpha = s ? 1 - smooth((t - impact - 0.2f) / 0.5f) : 0;
         Vector2 feet{fx[k], kFeetY};
-        if (!drawUnitSprite(ui, feet, kScale, ui == right, fade(WHITE, alpha))) {
+        if (!drawUnitSprite(ui, feet, kScale, ui == right, fade(WHITE, alpha), true)) {
             Color body = u.team == Team::Player ? kPlayerColor : kEnemyColor;
             DrawCircleV({feet.x, feet.y - 60}, 40, fade(body, alpha));
         }
         if (s && ui == victim && s->hit && strikeApplied && t < impact + 0.12f) {
             BeginBlendMode(BLEND_ADDITIVE);  // flash white on the hit
-            drawUnitSprite(ui, feet, kScale, ui == right, fade(WHITE, 0.8f * alpha));
+            drawUnitSprite(ui, feet, kScale, ui == right, fade(WHITE, 0.8f * alpha), true);
             EndBlendMode();
         }
     }
@@ -1671,9 +1745,11 @@ void Game::draw() const {
 
     if (state == State::Banner) {
         Color c = phase == Team::Player ? Color{120, 170, 255, 255} : Color{255, 110, 110, 255};
-        drawCenterBanner(bannerText.c_str(), c, nullptr);
+        bool opening = turn == 1 && phase == Team::Player;
+        drawCenterBanner(bannerText.c_str(), c, opening ? chapterName.c_str() : nullptr);
     } else if (state == State::Victory) {
-        drawCenterBanner("VICTORY", {255, 220, 120, 255}, TextFormat("Cleared on turn %d", turn));
+        drawCenterBanner(over() ? "VICTORY" : "CHAPTER CLEAR", {255, 220, 120, 255},
+                         TextFormat("Cleared on turn %d", turn));
     } else if (state == State::Defeat) {
         drawCenterBanner("GAME OVER", {255, 90, 90, 255}, "Rowan has fallen...");
     }

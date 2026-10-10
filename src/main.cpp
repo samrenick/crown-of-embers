@@ -12,6 +12,7 @@
 //   --screenshot  save a PNG after N frames and exit
 //   --scale       initial window scale (default: as large as fits, in half steps up to 2x)
 //   --battle-shot with --screenshot: capture T seconds into the first battle scene instead of at a frame
+//   --chapter     start at chapter N (1-based) with the starting army
 int main(int argc, char** argv) {
     bool autoplay = false;
     float speed = 1.0f;
@@ -19,6 +20,7 @@ int main(int argc, char** argv) {
     int shotFrame = 60;
     float startScale = 0;  // 0 = pick from monitor size
     float battleShot = -1;
+    int chapter = 0;
     for (int i = 1; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--autoplay")) autoplay = true;
         else if (!std::strcmp(argv[i], "--speed") && i + 1 < argc) speed = std::strtof(argv[++i], nullptr);
@@ -26,6 +28,7 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(argv[i], "--frames") && i + 1 < argc) shotFrame = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--scale") && i + 1 < argc) startScale = std::strtof(argv[++i], nullptr);
         else if (!std::strcmp(argv[i], "--battle-shot") && i + 1 < argc) battleShot = std::strtof(argv[++i], nullptr);
+        else if (!std::strcmp(argv[i], "--chapter") && i + 1 < argc) chapter = std::atoi(argv[++i]) - 1;
     }
 
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
@@ -50,7 +53,7 @@ int main(int argc, char** argv) {
 
     {
         // Scoped so the Game (and its textures) is destroyed before the window closes.
-        Game game(autoplay);
+        Game game(autoplay, chapter);
         int frame = 0;
         while (!WindowShouldClose()) {
             float dt = GetFrameTime();

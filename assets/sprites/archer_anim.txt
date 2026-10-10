@@ -3,5 +3,6 @@ cell 110 134 47 132
 idle 4
 walk 4
 attack 4 2
-dodge 3
+# the dodge frames run forward, but a dodge steps back; fall back to idle
+-dodge 3
 hurt 1

@@ -1,5 +1,7 @@
 # cell width, height, anchor x, feet y (px within a cell)
 cell 114 115 50 114
+# mounted: taller than infantry in battle scenes
+scale 1.5
 idle 1
 walk 3
 attack 3 1

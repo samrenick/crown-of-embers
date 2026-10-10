@@ -23,6 +23,7 @@ Debug flags:
 - `./build/fe --autoplay --speed 20` — AI plays both sides; prints the result and exits
 - `./build/fe --screenshot out.png --frames 120` — saves a PNG after N frames
 - `./build/fe --scale 1.5` — opens the window at a given scale
+- `./build/fe --chapter 2` — starts at a given chapter with the starting army
 - `./build/fe --autoplay --screenshot out.png --battle-shot 1.2` — saves a PNG 1.2s into the first battle scene
 
 ## Controls
@@ -42,6 +43,13 @@ The window opens as large as your screen allows and can be resized; the game sca
 
 While moving a unit, pick an enemy in range to walk to the best tile and attack it in one go. Select an enemy to preview its movement and attack range. Select an empty tile to open the map menu (End Turn).
 
+## Chapters
+
+1. **The Border Fields**: open country with a walled keep. Defeat Vargus on the throne.
+2. **The Ashen City**: an abandoned city cut by a canal. Streets are fast, rubble slows you down but gives cover, and Corvin holds the throne of a ruined cathedral.
+
+Survivors carry over between chapters with their levels and EXP. Losing restarts the current chapter.
+
 ## Mechanics
 
 - **Movement:** Dijkstra over per-terrain costs that vary by movement type (infantry, armored, cavalry, flier). Units can pass through allies but not enemies.
@@ -57,6 +65,6 @@ While moving a unit, pick an enemy in range to walk to the best tile and attack 
 - `src/types.h`: units, weapons, stats
 - `src/map.*`: terrain table, movement costs
 - `src/combat.*`: forecast and combat resolution
-- `src/level.*`: map layout and unit roster
+- `src/level.*`: chapter maps, enemy placements, and the starting army
 - `src/game.*`: state machine, AI, rendering
 - `src/main.cpp`: window, main loop, debug flags
