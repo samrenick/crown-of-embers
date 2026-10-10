@@ -71,6 +71,7 @@ private:
     std::vector<int> targetsFrom(int ui, int x, int y, ActionKind kind) const;
     Rectangle menuRect() const;
     int bestAttackTile(int ui, int target) const;
+    int closestStandable(int ui, int x, int y) const;
     float strikeImpact() const;  // seconds into a strike when damage lands
     float strikeLength() const;
 

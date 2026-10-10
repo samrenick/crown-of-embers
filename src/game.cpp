@@ -282,6 +282,20 @@ int Game::bestAttackTile(int ui, int target) const {
     return best;
 }
 
+int Game::closestStandable(int ui, int x, int y) const {
+    // Overshooting the move range lands on the reachable tile nearest the cursor; among equally near
+    // tiles, the straighter line to the cursor wins, then the one that walks farther.
+    int best = -1;
+    float bestD = 1e9f;
+    for (int t = 0; t < map.w * map.h; ++t) {
+        if (!standable(ui, reach, t)) continue;
+        int tx = t % map.w, ty = t / map.w;
+        float d = manhattan(tx, ty, x, y) * 1000.0f + std::hypot(float(tx - x), float(ty - y)) * 10.0f - reach.cost[t] * 0.01f;
+        if (d < bestD) best = t, bestD = d;
+    }
+    return best;
+}
+
 float Game::strikeImpact() const { return sceneActive ? kSceneImpact : kStrikeImpact; }
 float Game::strikeLength() const { return sceneActive ? kSceneStrike : 0.7f; }
 
@@ -766,8 +780,8 @@ void Game::updateSelected(const Input& in) {
     bool canStrike = foe >= 0 && units[foe].team != units[active].team && attackMask[t] &&
                      units[active].weapon.type != WeaponType::Staff;
     int strikeTile = canStrike ? bestAttackTile(active, foe) : -1;
-    if (strikeTile >= 0) path = pathTo(reach, strikeTile);
-    else if (reach.cost[t] >= 0) path = pathTo(reach, t);
+    int dest = strikeTile >= 0 ? strikeTile : standable(active, reach, t) ? t : closestStandable(active, cursorX, cursorY);
+    if (dest >= 0) path = pathTo(reach, dest);
     if (in.cancel) {
         cursorX = origX;
         cursorY = origY;
@@ -776,7 +790,7 @@ void Game::updateSelected(const Input& in) {
     } else if (in.confirm && strikeTile >= 0) {
         pendingAttack = foe;
         startMove(active, path, false);
-    } else if (in.confirm && standable(active, reach, t)) {
+    } else if (in.confirm && dest >= 0) {
         startMove(active, path, false);
     }
 }
