@@ -1,0 +1,7 @@
+# cell width, height, anchor x, feet y (px within a cell)
+cell 132 124 60 122
+idle 8
+walk 8
+attack 5 3
+hurt 4
+death 5
