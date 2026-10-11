@@ -199,7 +199,7 @@ void Game::startChapter() {
     }
     turn = 0;
     active = inspect = -1;
-    pendingAttack = pendingRescue = -1;
+    pendingAttack = -1;
     sceneActive = false;
     showDanger = false;
     popups.clear();
@@ -311,6 +311,15 @@ std::vector<int> Game::targetsFrom(int ui, int x, int y, ActionKind kind) const 
             out.push_back(static_cast<int>(i));
         if (kind == ActionKind::Heal && u.weapon.type == WeaponType::Staff && t.team == u.team && t.hp < t.stats.hp)
             out.push_back(static_cast<int>(i));
+    }
+    // Rescue: any adjacent ally, as long as neither side is already carrying someone.
+    if (kind == ActionKind::Rescue && u.carrying < 0) {
+        for (size_t i = 0; i < units.size(); ++i) {
+            const Unit& t = units[i];
+            if (t.alive && t.carriedBy < 0 && t.carrying < 0 && static_cast<int>(i) != ui && t.team == u.team &&
+                manhattan(x, y, t.x, t.y) == 1)
+                out.push_back(static_cast<int>(i));
+        }
     }
     return out;
 }
@@ -486,11 +495,6 @@ void Game::finishMove() {
             int e = pendingAttack;
             pendingAttack = -1;
             startCombat(active, e);
-        } else if (pendingRescue >= 0) {
-            rescue(active, pendingRescue);
-            pendingRescue = -1;
-            units[active].done = true;
-            afterAction();
         } else {
             openActionMenu();
         }
@@ -510,6 +514,7 @@ void Game::openActionMenu() {
     menu.clear();
     if (!targetsFrom(active, u.x, u.y, ActionKind::Attack).empty()) menu.push_back("Attack");
     if (!targetsFrom(active, u.x, u.y, ActionKind::Heal).empty()) menu.push_back("Heal");
+    if (!targetsFrom(active, u.x, u.y, ActionKind::Rescue).empty()) menu.push_back("Rescue");
     if (!dropTiles(active).empty()) menu.push_back("Drop");
     menu.push_back("Wait");
     menuIndex = 0;
@@ -885,11 +890,7 @@ void Game::updateSelected(const Input& in) {
     bool canStrike = foe >= 0 && units[foe].team != units[active].team && attackMask[t] &&
                      units[active].weapon.type != WeaponType::Staff;
     int strikeTile = canStrike ? bestAttackTile(active, foe) : -1;
-    // Moving onto a reachable ally picks them up (neither may already be carrying someone).
-    bool canRescue = foe >= 0 && foe != active && units[foe].team == units[active].team && reach.cost[t] >= 0 &&
-                     units[active].carrying < 0 && units[foe].carrying < 0;
     int dest = strikeTile >= 0 ? strikeTile
-               : canRescue     ? t
                : standable(active, reach, t) ? t
                                              : closestStandable(active, cursorX, cursorY);
     if (dest >= 0) path = pathTo(reach, dest);
@@ -900,9 +901,6 @@ void Game::updateSelected(const Input& in) {
         state = State::PlayerIdle;
     } else if (in.confirm && strikeTile >= 0) {
         pendingAttack = foe;
-        startMove(active, path, false);
-    } else if (in.confirm && canRescue) {
-        pendingRescue = foe;
         startMove(active, path, false);
     } else if (in.confirm && dest >= 0) {
         startMove(active, path, false);
@@ -945,8 +943,8 @@ void Game::updateMenu(const Input& in) {
         cursorX = targets[0] % map.w;
         cursorY = targets[0] / map.w;
         state = State::Target;
-    } else if (choice == "Attack" || choice == "Heal") {
-        actionKind = choice == "Attack" ? ActionKind::Attack : ActionKind::Heal;
+    } else if (choice == "Attack" || choice == "Heal" || choice == "Rescue") {
+        actionKind = choice == "Attack" ? ActionKind::Attack : choice == "Heal" ? ActionKind::Heal : ActionKind::Rescue;
         targets = targetsFrom(active, units[active].x, units[active].y, actionKind);
         targetIndex = 0;
         cursorX = units[targets[0]].x;
@@ -986,7 +984,11 @@ void Game::updateTarget(const Input& in) {
     } else if (in.confirm) {
         if (actionKind == ActionKind::Attack) startCombat(active, targets[targetIndex]);
         else if (actionKind == ActionKind::Heal) startHeal(active, targets[targetIndex]);
-        else {
+        else if (actionKind == ActionKind::Rescue) {
+            rescue(active, targets[targetIndex]);
+            units[active].done = true;
+            afterAction();
+        } else {
             drop(active, targets[targetIndex]);
             units[active].done = true;
             afterAction();
@@ -1181,9 +1183,9 @@ void Game::drawHighlights() const {
         const Unit& u = units[active];
         for (int t = 0; t < map.w * map.h; ++t) {
             int d = manhattan(u.x, u.y, t % map.w, t / map.w);
-            range[t] = d >= u.weapon.minRange && d <= u.weapon.maxRange;
+            range[t] = actionKind == ActionKind::Rescue ? d == 1 : d >= u.weapon.minRange && d <= u.weapon.maxRange;
         }
-        fillMask(range, actionKind == ActionKind::Heal ? kHealColor : kAttackColor, 0.35f);
+        fillMask(range, actionKind == ActionKind::Attack ? kAttackColor : actionKind == ActionKind::Heal ? kHealColor : kMoveColor, 0.35f);
     }
 
     if (state == State::Selected && path.size() > 1) {
@@ -1456,6 +1458,12 @@ void Game::drawForecast(int x, int y) const {
         DrawText("Choose a tile to set them down", x, y + 64, 16, kDim);
         return;
     }
+    if (actionKind == ActionKind::Rescue) {
+        DrawText("RESCUE", x, y, 18, {255, 220, 120, 255});
+        DrawText(units[targets[targetIndex]].name.c_str(), x, y + 34, 22, {130, 175, 255, 255});
+        DrawText("Carry them (Skl/Spd halved while carrying)", x, y + 64, 16, kDim);
+        return;
+    }
     const Unit& d = units[targets[targetIndex]];
     DrawText(actionKind == ActionKind::Heal ? "HEAL" : "COMBAT FORECAST", x, y, 18, {255, 220, 120, 255});
     if (actionKind == ActionKind::Heal) {
@@ -1531,7 +1539,7 @@ void Game::drawBottomBar() const {
     const char* help = "";
     switch (state) {
         case State::PlayerIdle: help = "Arrows/WASD/Mouse: move   Z/Enter/Click: select   X: cancel   R: danger zone   T: battle scenes"; break;
-        case State::Selected: help = "Choose a destination, an enemy to attack, or an ally to rescue   Z: move   X: cancel"; break;
+        case State::Selected: help = "Choose a destination or an enemy to attack   Z: move   X: cancel"; break;
         case State::Combat: help = sceneActive ? "Hold Z: fast-forward" : ""; break;
         case State::Menu: help = "Up/Down: choose   Z: confirm   X: back"; break;
         case State::Target: help = "Arrows: cycle targets   Z: confirm   X: back"; break;

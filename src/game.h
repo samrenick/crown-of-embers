@@ -31,7 +31,7 @@ public:
 private:
     enum class State { Banner, PlayerIdle, Selected, Moving, Menu, Target, Combat, LevelUp, AITurn, Victory, Defeat };
     enum class MenuKind { Action, Map };
-    enum class ActionKind { Attack, Heal, Drop };
+    enum class ActionKind { Attack, Heal, Drop, Rescue };
 
     struct Reach {
         std::vector<int> cost, prev;  // cost -1 = unreachable
@@ -179,7 +179,6 @@ private:
     int targetIndex = 0;
 
     int pendingAttack = -1;  // enemy to attack as soon as the current player move finishes
-    int pendingRescue = -1;  // ally to pick up as soon as the current player move finishes
     bool battleScenes = true;  // show the GBA-style battle screen for attacks
     bool sceneActive = false;  // the current combat is using it
     float sceneT = 0;          // seconds since the battle scene opened
