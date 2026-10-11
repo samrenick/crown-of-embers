@@ -1,4 +1,5 @@
 #include "game.h"
+#include "assets.h"
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -36,16 +37,6 @@ float frameTime(const std::string& anim) {
     if (anim == "idle") return 0.18f;
     if (anim == "walk") return 0.12f;
     return 0.1f;
-}
-
-std::string findAsset(const std::string& file) {
-    // Look next to the working directory first (make run), then beside the binary (build/fe),
-    // then inside a macOS app bundle (Contents/MacOS/fe -> Contents/Resources/assets).
-    std::string dir = GetApplicationDirectory();
-    for (std::string path : {"assets/sprites/" + file, dir + "../assets/sprites/" + file,
-                             dir + "../Resources/assets/sprites/" + file})
-        if (FileExists(path.c_str())) return path;
-    return "";
 }
 
 bool pressed(int key) { return IsKeyPressed(key) || IsKeyPressedRepeat(key); }
@@ -107,8 +98,8 @@ void Game::loadSprites() {
     };
     for (const auto& [cls, name, facesLeft] : files) {
         // Prefer an animation atlas (<name>_anim.png + .txt layout); fall back to a single still.
-        std::string meta = findAsset(std::string(name) + "_anim.txt");
-        std::string png = findAsset(meta.empty() ? std::string(name) + ".png" : std::string(name) + "_anim.png");
+        std::string meta = findAsset("sprites/" + std::string(name) + "_anim.txt");
+        std::string png = findAsset("sprites/" + std::string(name) + (meta.empty() ? ".png" : "_anim.png"));
         if (png.empty()) continue;
         Sprite sp;
         sp.tex = LoadTexture(png.c_str());
@@ -205,6 +196,7 @@ void Game::startChapter() {
     popups.clear();
     levelUps.clear();
     message.clear();
+    audio.startTheme();
     int lord = lordIndex();
     cursorX = units[lord].x;
     cursorY = units[lord].y;
@@ -378,6 +370,7 @@ void Game::rescue(int carrier, int ally) {
     units[ally].x = units[carrier].x;
     units[ally].y = units[carrier].y;
     addPopup(units[carrier].x, units[carrier].y, "Rescue!", {140, 220, 255, 255});
+    audio.play(Sfx::Drop);
     message = units[carrier].name + " rescues " + units[ally].name + ".";
 }
 
@@ -392,6 +385,7 @@ void Game::drop(int carrier, int tile) {
     a.drawY = static_cast<float>(a.y);
     a.done = true;  // a dropped unit has spent its turn
     units[carrier].carrying = -1;
+    audio.play(Sfx::Drop);
 }
 
 float Game::strikeImpact() const { return sceneActive ? kSceneImpact : kStrikeImpact; }
@@ -407,6 +401,12 @@ Rectangle Game::menuRect() const {
     float x = ax < MAP_W / 2 ? (ax + 1) * TILE + 8.0f : ax * TILE - MENU_W - 8.0f;
     float y = std::clamp(ay * TILE - 4.0f, 4.0f, MAP_PX_H - h - 4.0f);
     return {x, y, static_cast<float>(MENU_W), h};
+}
+
+void Game::showLevelUp() {
+    levelTimer = 0;
+    state = State::LevelUp;
+    audio.play(Sfx::LevelUp);
 }
 
 void Game::addPopup(int x, int y, std::string text, Color c) {
@@ -434,6 +434,7 @@ void Game::beginPhase(Team t) {
     }
     active = inspect = -1;
     bannerText = t == Team::Player ? "PLAYER PHASE" : "ENEMY PHASE";
+    audio.play(t == Team::Player ? Sfx::PhasePlayer : Sfx::PhaseEnemy);
     bannerTimer = 1.3f;
     state = State::Banner;
 }
@@ -443,10 +444,12 @@ void Game::afterAction() {
     bool bossDead = std::any_of(units.begin(), units.end(), [](const Unit& u) { return u.isBoss && !u.alive; });
     if (bossDead || !teamAlive(Team::Enemy)) {
         state = State::Victory;
+        audio.playVictory();
         return;
     }
     if (!units[lordIndex()].alive || !teamAlive(Team::Player)) {
         state = State::Defeat;
+        audio.playDefeat();
         return;
     }
     if (isAIPhase()) {
@@ -469,6 +472,7 @@ void Game::selectUnit(int ui) {
     computeRanges(ui, moveMask, attackMask);
     path = {idx(origX, origY)};
     state = State::Selected;
+    audio.play(Sfx::Select);
 }
 
 void Game::startMove(int ui, std::vector<int> p, bool byAI) {
@@ -560,6 +564,7 @@ void Game::startHeal(int h, int t) {
     int amt = std::min(units[h].stats.mag + 10, target.stats.hp - target.hp);
     target.hp += amt;
     addPopup(target.x, target.y, "+" + std::to_string(amt), kHealColor);
+    audio.play(Sfx::Heal);
     message = units[h].name + " heals " + target.name + ".";
     combatTimer = 0;
     state = State::Combat;
@@ -567,7 +572,16 @@ void Game::startHeal(int h, int t) {
 
 void Game::applyStrike(const Strike& s) {
     Unit& target = s.byAttacker ? units[combatD] : units[combatA];
+    const Unit& striker = s.byAttacker ? units[combatA] : units[combatD];
     target.hp = std::max(0, target.hp - s.damage);
+    if (!s.hit) {
+        audio.play(Sfx::Miss);
+    } else {
+        WeaponType wt = striker.weapon.type;
+        audio.play(wt == WeaponType::Bow ? Sfx::Arrow : wt == WeaponType::Tome ? Sfx::Fire : Sfx::Hit);
+        if (s.crit) audio.play(Sfx::Crit);
+        if (target.hp == 0) audio.play(Sfx::Death);
+    }
     if (s.hit) landed[s.byAttacker ? 0 : 1] = true;
     if (!s.hit) addPopup(target.x, target.y, "MISS", {220, 220, 230, 255});
     else if (s.crit) addPopup(target.x, target.y, "CRIT! " + std::to_string(s.damage), {255, 200, 40, 255});
@@ -662,8 +676,7 @@ void Game::endCombat() {
     }
     a.done = true;
     if (!levelUps.empty()) {
-        levelTimer = 0;
-        state = State::LevelUp;
+        showLevelUp();
     } else {
         afterAction();
     }
@@ -831,6 +844,7 @@ Game::Input Game::readInput() {
     if (IsKeyPressed(KEY_Q)) in.cycle = -1;
     in.fast |= IsKeyDown(KEY_Z) || IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_SPACE) || IsMouseButtonDown(MOUSE_BUTTON_LEFT);
     in.toggleScenes |= IsKeyPressed(KEY_T);
+    in.mute = IsKeyPressed(KEY_M);
     in.mouse = GetMousePosition();
     Vector2 delta = GetMouseDelta();
     if ((delta.x != 0 || delta.y != 0) && in.mouse.x >= 0 && in.mouse.y >= 0 && in.mouse.x < MAP_PX_W &&
@@ -875,9 +889,11 @@ void Game::updatePlayerIdle(const Input& in) {
     if (u >= 0 && units[u].team == Team::Player && !units[u].done) {
         selectUnit(u);
     } else if (u >= 0 && units[u].team == Team::Enemy) {
+        audio.play(Sfx::Select);
         inspect = inspect == u ? -1 : u;
         if (inspect >= 0) computeRanges(inspect, moveMask, attackMask);
     } else if (u < 0) {
+        audio.play(Sfx::Select);
         openMapMenu();
     }
 }
@@ -895,14 +911,17 @@ void Game::updateSelected(const Input& in) {
                                              : closestStandable(active, cursorX, cursorY);
     if (dest >= 0) path = pathTo(reach, dest);
     if (in.cancel) {
+        audio.play(Sfx::Cancel);
         cursorX = origX;
         cursorY = origY;
         active = -1;
         state = State::PlayerIdle;
     } else if (in.confirm && strikeTile >= 0) {
+        audio.play(Sfx::Select);
         pendingAttack = foe;
         startMove(active, path, false);
     } else if (in.confirm && dest >= 0) {
+        audio.play(Sfx::Select);
         startMove(active, path, false);
     }
 }
@@ -918,6 +937,7 @@ void Game::updateMenu(const Input& in) {
     }
 
     if (in.cancel) {
+        audio.play(Sfx::Cancel);
         if (menuKind == MenuKind::Action) {
             // Undo the move and go back to choosing a destination.
             Unit& u = units[active];
@@ -936,6 +956,7 @@ void Game::updateMenu(const Input& in) {
     if (!in.confirm || (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !mouseInMenu)) return;
 
     const std::string& choice = menu[menuIndex];
+    audio.play(Sfx::Select);
     if (choice == "Drop") {
         actionKind = ActionKind::Drop;
         targets = dropTiles(active);
@@ -978,6 +999,7 @@ void Game::updateTarget(const Input& in) {
     cursorX = tx(targetIndex);
     cursorY = ty(targetIndex);
     if (in.cancel) {
+        audio.play(Sfx::Cancel);
         cursorX = units[active].x;
         cursorY = units[active].y;
         openActionMenu();
@@ -1008,6 +1030,12 @@ void Game::update(float dt) {
         units[i].drawX = static_cast<float>(units[i].x);
         units[i].drawY = static_cast<float>(units[i].y);
     }
+    if (in.mute) {
+        audio.toggleMute();
+        message = audio.muted() ? "Sound: OFF" : "Sound: ON";
+    }
+    audio.setBattle(state == State::Combat && !combatIsHeal);
+    audio.update(dt);
     if (in.toggleScenes && state != State::Combat) {
         battleScenes = !battleScenes;
         message = battleScenes ? "Battle scenes: ON" : "Battle scenes: OFF";
@@ -1057,21 +1085,36 @@ void Game::update(float dt) {
             levelTimer += dt;
             if ((in.confirm && levelTimer > 0.4f) || (autoplay && levelTimer > 1.0f)) {
                 levelUps.erase(levelUps.begin());
-                levelTimer = 0;
                 if (levelUps.empty()) afterAction();
+                else showLevelUp();
             }
             break;
         case State::AITurn: updateAI(dt); break;
         case State::Victory:
             if (in.confirm || (autoplay && !over())) {
+                audio.play(Sfx::Select);
                 if (chapter + 1 < kChapterCount) advanceChapter();
                 else newCampaign(0);
             }
             break;
         case State::Defeat:
-            if (in.confirm) startChapter();
+            if (in.confirm) {
+                audio.play(Sfx::Select);
+                startChapter();
+            }
             break;
     }
+
+    // Tick as the player's cursor or menu highlight moves.
+    // Jumps that come with a change of state (cancel, opening a menu) already have their own sound.
+    bool browsing = state == State::PlayerIdle || state == State::Selected || state == State::Target;
+    bool moved = cursorX != lastCursorX || cursorY != lastCursorY;
+    bool menuMoved = state == State::Menu && lastMenuIndex >= 0 && menuIndex != lastMenuIndex;
+    if (state == lastState && ((browsing && moved) || menuMoved)) audio.play(Sfx::Cursor);
+    lastState = state;
+    lastCursorX = cursorX;
+    lastCursorY = cursorY;
+    lastMenuIndex = state == State::Menu ? menuIndex : -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -1543,7 +1586,7 @@ void Game::drawBottomBar() const {
     DrawLine(0, y, SCREEN_W, y, kPanelLine);
     const char* help = "";
     switch (state) {
-        case State::PlayerIdle: help = "Arrows/WASD/Mouse: move   Z/Enter/Click: select   X: cancel   R: danger zone   T: battle scenes"; break;
+        case State::PlayerIdle: help = "Arrows/WASD/Mouse: move   Z/Enter/Click: select   X: cancel   R: danger zone   T: battle scenes   M: mute"; break;
         case State::Selected: help = "Choose a destination or an enemy to attack   Z: move   X: cancel"; break;
         case State::Combat: help = sceneActive ? "Hold Z: fast-forward" : ""; break;
         case State::Menu: help = "Up/Down: choose   Z: confirm   X: back"; break;

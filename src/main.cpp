@@ -51,8 +51,11 @@ int main(int argc, char** argv) {
         SetWindowPosition(std::max(0, (mw - w) / 2), std::max(0, (mh - h) / 2));
     }
 
+    // Test runs (autoplay, screenshots) stay silent.
+    if (!autoplay && !shotPath) InitAudioDevice();
+
     {
-        // Scoped so the Game (and its textures) is destroyed before the window closes.
+        // Scoped so the Game (and its textures and sounds) is destroyed before the window closes.
         Game game(autoplay, chapter);
         int frame = 0;
         while (!WindowShouldClose()) {
@@ -103,6 +106,7 @@ int main(int argc, char** argv) {
             }
         }
     }
+    if (IsAudioDeviceReady()) CloseAudioDevice();
     CloseWindow();
     return 0;
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include "audio.h"
 #include "combat.h"
 #include "level.h"
 #include <map>
@@ -42,6 +43,7 @@ private:
         int cycle = 0;  // +1 / -1: jump to the next / previous unit that can still act
         bool fast = false;          // confirm held: fast-forward battle scenes
         bool toggleScenes = false;  // turn battle scenes on/off
+        bool mute = false;
         bool mouseMoved = false;
         int mx = -1, my = -1;  // hovered map tile
         Vector2 mouse{};
@@ -97,6 +99,7 @@ private:
     void gainExp(int ui, int amount);
     void runAI(int ui);
     void addPopup(int x, int y, std::string text, Color c);
+    void showLevelUp();
 
     // per-state input handling
     Input readInput();
@@ -207,4 +210,8 @@ private:
     int padHeldX = 0, padHeldY = 0;  // gamepad direction currently held, for auto-repeat
     float padRepeat = 0;
     std::string message;
+
+    Audio audio;
+    State lastState = State::Banner;  // for the cursor tick
+    int lastCursorX = -1, lastCursorY = -1, lastMenuIndex = -1;
 };

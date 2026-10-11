@@ -35,8 +35,15 @@ install: app
 	rm -rf "/Applications/Crown of Embers.app"
 	cp -R "$(APP)" /Applications/
 
+# Regenerate assets/audio (needs FluidSynth and a GM soundfont: make audio SOUNDFONT=path/to.sf3).
+build/qoaconv: tools/qoaconv.cpp | build
+	$(CXX) $(CXXFLAGS) $< $(LDFLAGS) -o $@
+
+audio: build/qoaconv
+	python3 tools/compose.py "$(SOUNDFONT)"
+
 clean:
 	rm -rf build
 
-.PHONY: run clean app install
+.PHONY: run clean app install audio
 -include $(OBJ:.o=.d)
