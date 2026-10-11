@@ -10,6 +10,7 @@ static const TerrainInfo kTerrain[] = {
     {"Throne",   3, 30, 20, {150, 116, 160, 255}},
     {"Road",     0, 0,  0,  {150, 142, 126, 255}},
     {"Rubble",   1, 10, 0,  {128, 118, 104, 255}},
+    {"Peak",     3, 40, 0,  {124, 116, 110, 255}},
 };
 
 // Columns: Infantry, Armored, Cavalry, Flier
@@ -23,6 +24,7 @@ static const int kMoveCost[][4] = {
     {1, 1, 1, 1},     // Throne
     {1, 1, 1, 1},     // Road
     {2, 2, 3, 1},     // Rubble
+    {-1, -1, -1, 2},  // Peak: only fliers can cross
 };
 
 const TerrainInfo& terrainInfo(Terrain t) { return kTerrain[static_cast<int>(t)]; }
@@ -46,6 +48,7 @@ Map Map::fromStrings(const std::vector<std::string>& rows) {
                 case 'T': m.tiles.push_back(Terrain::Throne); break;
                 case '=': m.tiles.push_back(Terrain::Road); break;
                 case 'r': m.tiles.push_back(Terrain::Rubble); break;
+                case '^': m.tiles.push_back(Terrain::Peak); break;
                 default:  m.tiles.push_back(Terrain::Plain); break;
             }
         }

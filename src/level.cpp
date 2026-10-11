@@ -11,6 +11,7 @@ const Weapon kSteelSword {"Steel Sword",  WT::Sword, 8,  75, 0,  10, 1, 1};
 const Weapon kIronLance  {"Iron Lance",   WT::Lance, 7,  80, 0,  8,  1, 1};
 const Weapon kJavelin    {"Javelin",      WT::Lance, 6,  65, 0,  11, 1, 2};
 const Weapon kIronAxe    {"Iron Axe",     WT::Axe,   8,  75, 0,  10, 1, 1};
+const Weapon kHandAxe    {"Hand Axe",     WT::Axe,   7,  60, 0,  12, 1, 2};
 const Weapon kIronBow    {"Iron Bow",     WT::Bow,   6,  85, 0,  5,  2, 2, bit(MT::Flier)};
 const Weapon kFire       {"Fire",         WT::Tome,  5,  90, 0,  4,  1, 2};
 const Weapon kHeal       {"Heal",         WT::Staff, 0,  0,  0,  2,  1, 1};
@@ -158,8 +159,66 @@ Level ashenCity() {
     return lv;
 }
 
+// A mountain whose summit only fliers can cross. Roads wind around both flanks to a hill keep on
+// the far side; armored and mounted units must take the long way, while infantry can scramble over
+// the shoulders. Enemy pegasus knights strike straight across the peaks.
+Level emberPeak() {
+    Level lv;
+    lv.name = "Chapter 3: Ember Peak";
+    lv.map = Map::fromStrings({
+        "mm.f.#..T..#.fmm",
+        "m.===.......===m",
+        "..=f.##F.F##f.=.",
+        ".f=.mm^^^^^^m.=f",
+        "..=mm^^^^^^^m.=.",
+        "f.=m^^^^^^^^mm=.",
+        "..=.m^^^^^^mm.=.",
+        ".f=..mmm^mmm.f=.",
+        "..==..f.m.f..==.",
+        "...===========..",
+        "F.f............F",
+    });
+    lv.objective = "Defeat the boss";
+    lv.starts = {{8, 10}, {9, 10}, {6, 9}, {7, 9}, {8, 9}, {9, 9}, {7, 10}};
+
+    const Team E = Team::Enemy;
+    const Stats none{};
+    auto& u = lv.units;
+    //                                                     HP Str Mag Skl Spd Lck Def Res
+    u.push_back(make("Skarde", "Brigand", E, MT::Infantry, 12, 5, {34, 11, 0, 8, 9, 3, 6, 1},
+                     none, kHandAxe, 8, 0, AIMode::Hold));
+    u.back().isBoss = true;
+    u.push_back(make("Knight", "Knight", E, MT::Armored, 5, 4, {26, 9, 0, 5, 2, 1, 11, 1},
+                     none, kIronLance, 5, 1, AIMode::Hold));
+    u.push_back(make("Knight", "Knight", E, MT::Armored, 5, 4, {26, 9, 0, 5, 2, 1, 11, 1},
+                     none, kIronLance, 11, 1, AIMode::Hold));
+    u.push_back(make("Mage", "Mage", E, MT::Infantry, 4, 5, {19, 0, 7, 6, 6, 1, 2, 6},
+                     none, kFire, 8, 1, AIMode::InRange));
+    u.push_back(make("Soldier", "Soldier", E, MT::Infantry, 4, 5, {22, 7, 0, 5, 5, 1, 6, 1},
+                     none, kIronLance, 7, 2, AIMode::InRange));
+    u.push_back(make("Mercenary", "Mercenary", E, MT::Infantry, 5, 5, {24, 8, 0, 9, 9, 2, 5, 1},
+                     none, kSteelSword, 13, 2));
+    u.push_back(make("Pegasus Knight", "Pegasus Knight", E, MT::Flier, 4, 7, {19, 6, 0, 7, 10, 3, 4, 6},
+                     none, kIronLance, 7, 4, AIMode::InRange));
+    u.push_back(make("Pegasus Knight", "Pegasus Knight", E, MT::Flier, 4, 7, {19, 6, 0, 7, 10, 3, 4, 6},
+                     none, kIronLance, 10, 5, AIMode::InRange));
+    u.push_back(make("Archer", "Archer", E, MT::Infantry, 4, 5, {20, 6, 0, 7, 6, 1, 3, 1},
+                     none, kIronBow, 4, 4, AIMode::InRange));
+    u.push_back(make("Archer", "Archer", E, MT::Infantry, 4, 5, {20, 6, 0, 7, 6, 1, 3, 1},
+                     none, kIronBow, 12, 4, AIMode::InRange));
+    u.push_back(make("Brigand", "Brigand", E, MT::Infantry, 4, 5, {25, 8, 0, 4, 6, 0, 3, 0},
+                     none, kIronAxe, 3, 5));
+    u.push_back(make("Brigand", "Brigand", E, MT::Infantry, 4, 5, {25, 8, 0, 4, 6, 0, 3, 0},
+                     none, kIronAxe, 13, 5));
+    return lv;
+}
+
 }  // namespace
 
 Level makeLevel(int chapter) {
-    return chapter == 1 ? ashenCity() : borderFields();
+    switch (chapter) {
+        case 1: return ashenCity();
+        case 2: return emberPeak();
+        default: return borderFields();
+    }
 }

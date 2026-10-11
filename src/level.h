@@ -10,7 +10,7 @@ struct Level {
     std::string name, objective;
 };
 
-constexpr int kChapterCount = 2;
+constexpr int kChapterCount = 3;
 
 std::vector<Unit> startingRoster();  // the player's army at the start of the campaign
 Level makeLevel(int chapter);

@@ -47,6 +47,7 @@ While moving a unit, pick an enemy in range to walk to the best tile and attack 
 
 1. **The Border Fields**: open country with a walled keep. Defeat Vargus on the throne.
 2. **The Ashen City**: an abandoned city cut by a canal. Streets are fast, rubble slows you down but gives cover, and Corvin holds the throne of a ruined cathedral.
+3. **Ember Peak**: roads wind around a mountain whose snowy peaks only fliers can cross. Knights guard the gates of the hill keep where the brigand chief Skarde waits, and enemy pegasus knights swoop straight over the summit.
 
 Survivors carry over between chapters with their levels and EXP. Losing restarts the current chapter.
 

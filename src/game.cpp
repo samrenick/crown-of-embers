@@ -1099,6 +1099,11 @@ void Game::drawTile(int x, int y) const {
             DrawTriangle({px + 24, py + 6}, {px + 4, py + 42}, {px + 44, py + 42}, {116, 94, 70, 255});
             DrawTriangle({px + 24, py + 6}, {px + 18, py + 17}, {px + 30, py + 17}, {240, 240, 245, 255});
             break;
+        case Terrain::Peak:
+            DrawTriangle({px + 24, py + 2}, {px + 1, py + 46}, {px + 47, py + 46}, {92, 84, 80, 255});
+            DrawTriangle({px + 24, py + 2}, {px + 13, py + 22}, {px + 35, py + 22}, {240, 240, 245, 255});
+            DrawTriangle({px + 24, py + 2}, {px + 24, py + 46}, {px + 47, py + 46}, Fade(BLACK, 0.15f));
+            break;
         case Terrain::Water: {
             float phase = static_cast<float>(std::fmod(GetTime() * 8.0, 12.0));
             for (int i = 0; i < 3; ++i) {
