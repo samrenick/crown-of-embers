@@ -53,8 +53,8 @@ std::vector<Unit> startingRoster() {
                      {70, 40, 5, 55, 45, 35, 15, 15}, kIronBow, 0, 0));
     u.push_back(make("Elsa", "Mage", P, MT::Infantry, 2, 5, {16, 0, 7, 6, 7, 5, 2, 6},
                      {55, 5, 55, 40, 50, 35, 10, 40}, kFire, 0, 0));
-    u.push_back(make("Pell", "Pegasus Knight", P, MT::Flier, 2, 7, {17, 5, 0, 8, 11, 7, 4, 6},
-                     {60, 35, 10, 45, 65, 50, 15, 35}, kIronLance, 0, 0));
+    u.push_back(make("Pell", "Pegasus Knight", P, MT::Flier, 2, 7, {21, 7, 0, 9, 12, 7, 5, 7},
+                     {70, 45, 10, 50, 65, 50, 20, 40}, kIronLance, 0, 0));
     u.push_back(make("Nia", "Cleric", P, MT::Infantry, 1, 5, {15, 0, 5, 4, 6, 8, 1, 7},
                      {50, 5, 50, 30, 45, 60, 10, 50}, kHeal, 0, 0));
     u.push_back(make("Sable", "Thief", P, MT::Infantry, 2, 6, {17, 5, 0, 10, 12, 6, 3, 2},
