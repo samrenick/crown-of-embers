@@ -28,6 +28,9 @@ public:
     int turnNumber() const { return turn; }
     // Seconds into the current battle scene, or -1 when none is showing (used for debug screenshots).
     float battleClock() const { return sceneActive && state == State::Combat ? sceneT : -1; }
+    // Width of the game's drawing area: the full screen, or just the map while the side panel is hidden.
+    int viewWidth() const { return panelHidden ? MAP_W * TILE : SCREEN_W; }
+    void hidePanel() { panelHidden = true; }
 
 private:
     enum class State { Banner, PlayerIdle, Selected, Moving, Menu, Target, Combat, LevelUp, AITurn, Victory, Defeat };
@@ -43,6 +46,7 @@ private:
         int cycle = 0;  // +1 / -1: jump to the next / previous unit that can still act
         bool fast = false;          // confirm held: fast-forward battle scenes
         bool toggleScenes = false;  // turn battle scenes on/off
+        bool togglePanel = false;   // show/hide the side panel
         bool mute = false;
         bool mouseMoved = false;
         int mx = -1, my = -1;  // hovered map tile
@@ -121,7 +125,7 @@ private:
     void drawCursor() const;
     void drawMenu() const;
     void drawCombatHud() const;
-    void drawPanel() const;
+    void drawPanel(int px) const;
     void drawUnitInfo(const Unit& u, int x, int y) const;
     void drawForecast(int x, int y) const;
     void drawBottomBar() const;
@@ -183,6 +187,7 @@ private:
 
     int pendingAttack = -1;  // enemy to attack as soon as the current player move finishes
     bool battleScenes = true;  // show the GBA-style battle screen for attacks
+    bool panelHidden = false;  // side panel collapsed; the forecast then overlays the map while targeting
     bool sceneActive = false;  // the current combat is using it
     float sceneT = 0;          // seconds since the battle scene opened
     Forecast combatForecast{};

@@ -1,5 +1,6 @@
 #include "game.h"
 #include "assets.h"
+#include "rlgl.h"
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -94,7 +95,7 @@ void Game::loadSprites() {
         {"Knight", "knight", false},   {"Archer", "archer", false},   {"Cleric", "cleric", false},
         {"Cavalier", "cavalier", false}, {"Mage", "mage", false},     {"Lord", "lord", true},
         {"Pegasus Knight", "pegasus", false}, {"General", "general", false}, {"Brigand", "brigand", false},
-        {"Mercenary", "mercenary", false}, {"Soldier", "soldier", false},
+        {"Mercenary", "mercenary", false}, {"Soldier", "soldier", false}, {"Thief", "thief", false},
     };
     for (const auto& [cls, name, facesLeft] : files) {
         // Prefer an animation atlas (<name>_anim.png + .txt layout); fall back to a single still.
@@ -156,11 +157,12 @@ void Game::newCampaign(int startChapter) {
 }
 
 void Game::advanceChapter() {
-    // Survivors carry over with their levels and EXP, healed and set down.
+    // The whole army carries over with their levels and EXP; anyone who fell comes back, healed and set down.
     std::vector<Unit> next;
     for (const Unit& u : units) {
-        if (u.team != Team::Player || !u.alive) continue;
+        if (u.team != Team::Player) continue;
         Unit s = u;
+        s.alive = true;
         s.hp = s.stats.hp;
         s.done = false;
         s.carrying = s.carriedBy = -1;
@@ -304,6 +306,8 @@ std::vector<int> Game::targetsFrom(int ui, int x, int y, ActionKind kind) const 
         if (kind == ActionKind::Heal && u.weapon.type == WeaponType::Staff && t.team == u.team && t.hp < t.stats.hp)
             out.push_back(static_cast<int>(i));
     }
+    // Healers can also mend themselves, wherever they end up standing.
+    if (kind == ActionKind::Heal && u.weapon.type == WeaponType::Staff && u.hp < u.stats.hp) out.push_back(ui);
     // Rescue: any adjacent ally, as long as neither side is already carrying someone.
     if (kind == ActionKind::Rescue && u.carrying < 0) {
         for (size_t i = 0; i < units.size(); ++i) {
@@ -521,7 +525,8 @@ void Game::openActionMenu() {
     if (!targetsFrom(active, u.x, u.y, ActionKind::Rescue).empty()) menu.push_back("Rescue");
     if (!dropTiles(active).empty()) menu.push_back("Drop");
     menu.push_back("Wait");
-    menuIndex = 0;
+    // Rescue is never the default: an accidental confirm shouldn't pick up an ally.
+    menuIndex = menu.front() == "Rescue" ? static_cast<int>(menu.size()) - 1 : 0;
     menuKind = MenuKind::Action;
     state = State::Menu;
 }
@@ -565,7 +570,7 @@ void Game::startHeal(int h, int t) {
     target.hp += amt;
     addPopup(target.x, target.y, "+" + std::to_string(amt), kHealColor);
     audio.play(Sfx::Heal);
-    message = units[h].name + " heals " + target.name + ".";
+    message = h == t ? units[h].name + " heals." : units[h].name + " heals " + target.name + ".";
     combatTimer = 0;
     state = State::Combat;
 }
@@ -844,6 +849,7 @@ Game::Input Game::readInput() {
     if (IsKeyPressed(KEY_Q)) in.cycle = -1;
     in.fast |= IsKeyDown(KEY_Z) || IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_SPACE) || IsMouseButtonDown(MOUSE_BUTTON_LEFT);
     in.toggleScenes |= IsKeyPressed(KEY_T);
+    in.togglePanel |= IsKeyPressed(KEY_TAB);
     in.mute = IsKeyPressed(KEY_M);
     in.mouse = GetMousePosition();
     Vector2 delta = GetMouseDelta();
@@ -1036,6 +1042,10 @@ void Game::update(float dt) {
     }
     audio.setBattle(state == State::Combat && !combatIsHeal);
     audio.update(dt);
+    if (in.togglePanel) {
+        panelHidden = !panelHidden;
+        message = panelHidden ? "Side panel: hidden (Tab to show)" : "Side panel: shown";
+    }
     if (in.toggleScenes && state != State::Combat) {
         battleScenes = !battleScenes;
         message = battleScenes ? "Battle scenes: ON" : "Battle scenes: OFF";
@@ -1545,8 +1555,7 @@ void Game::drawForecast(int x, int y) const {
     if (a.weapon.effective & bit(d.moveType)) DrawText("Effective damage!", x, y + 190, 16, {255, 170, 90, 255});
 }
 
-void Game::drawPanel() const {
-    int px = MAP_PX_W;
+void Game::drawPanel(int px) const {
     DrawRectangle(px, 0, PANEL_W, MAP_PX_H, kPanelBg);
     DrawLine(px, 0, px, MAP_PX_H, kPanelLine);
     int x = px + 16;
@@ -1582,11 +1591,14 @@ void Game::drawPanel() const {
 
 void Game::drawBottomBar() const {
     int y = MAP_PX_H;
-    DrawRectangle(0, y, SCREEN_W, BAR_H, {18, 19, 26, 255});
-    DrawLine(0, y, SCREEN_W, y, kPanelLine);
+    DrawRectangle(0, y, viewWidth(), BAR_H, {18, 19, 26, 255});
+    DrawLine(0, y, viewWidth(), y, kPanelLine);
     const char* help = "";
     switch (state) {
-        case State::PlayerIdle: help = "Arrows/WASD/Mouse: move   Z/Enter/Click: select   X: cancel   R: danger zone   T: battle scenes   M: mute"; break;
+        case State::PlayerIdle:
+            help = panelHidden ? "Z: select   X: cancel   R: danger   T: scenes   M: mute   Tab: panel"
+                               : "Z/Enter/Click: select   X: cancel   R: danger zone   T: battle scenes   M: mute   Tab: hide panel";
+            break;
         case State::Selected: help = "Choose a destination or an enemy to attack   Z: move   X: cancel"; break;
         case State::Combat: help = sceneActive ? "Hold Z: fast-forward" : ""; break;
         case State::Menu: help = "Up/Down: choose   Z: confirm   X: back"; break;
@@ -1810,7 +1822,26 @@ void Game::draw() const {
         drawCenterBanner("GAME OVER", {255, 90, 90, 255}, "Rowan has fallen...");
     }
 
-    drawPanel();
-    drawBattleScene();
+    if (!panelHidden) {
+        drawPanel(MAP_PX_W);
+    } else if (state == State::Target) {
+        // Collapsed panel: float it over the half of the map away from the target so the forecast stays visible.
+        int tx = units[targets[targetIndex]].x;
+        drawPanel(tx >= MAP_W / 2 ? 0 : MAP_PX_W - PANEL_W);
+    }
+    if (panelHidden && state == State::Combat && sceneActive) {
+        // The battle scene is laid out for the full screen width; shrink it to fit over the map.
+        float s = static_cast<float>(MAP_PX_W) / SCREEN_W;
+        float vis = std::clamp(sceneT / 0.25f, 0.0f, 1.0f);  // same fade in/out as the scene itself
+        if (strikeIndex >= strikes.size()) vis *= 1 - std::clamp((combatTimer - (kSceneOutro - 0.25f)) / 0.25f, 0.0f, 1.0f);
+        DrawRectangle(0, 0, MAP_PX_W, MAP_PX_H, Fade(BLACK, 0.85f * vis));
+        rlPushMatrix();
+        rlTranslatef(0, MAP_PX_H * (1 - s) / 2, 0);
+        rlScalef(s, s, 1);
+        drawBattleScene();
+        rlPopMatrix();
+    } else {
+        drawBattleScene();
+    }
     drawBottomBar();
 }

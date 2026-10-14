@@ -13,6 +13,7 @@
 //   --scale       initial window scale (default: as large as fits, in half steps up to 2x)
 //   --battle-shot with --screenshot: capture T seconds into the first battle scene instead of at a frame
 //   --chapter     start at chapter N (1-based) with the starting army
+//   --hide-panel  start with the side panel collapsed (Tab toggles it in game)
 int main(int argc, char** argv) {
     bool autoplay = false;
     float speed = 1.0f;
@@ -21,6 +22,7 @@ int main(int argc, char** argv) {
     float startScale = 0;  // 0 = pick from monitor size
     float battleShot = -1;
     int chapter = 0;
+    bool hidePanel = false;
     for (int i = 1; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--autoplay")) autoplay = true;
         else if (!std::strcmp(argv[i], "--speed") && i + 1 < argc) speed = std::strtof(argv[++i], nullptr);
@@ -28,6 +30,7 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(argv[i], "--frames") && i + 1 < argc) shotFrame = std::atoi(argv[++i]);
         else if (!std::strcmp(argv[i], "--scale") && i + 1 < argc) startScale = std::strtof(argv[++i], nullptr);
         else if (!std::strcmp(argv[i], "--battle-shot") && i + 1 < argc) battleShot = std::strtof(argv[++i], nullptr);
+        else if (!std::strcmp(argv[i], "--hide-panel")) hidePanel = true;
         else if (!std::strcmp(argv[i], "--chapter") && i + 1 < argc) chapter = std::atoi(argv[++i]) - 1;
     }
 
@@ -36,7 +39,7 @@ int main(int argc, char** argv) {
     InitWindow(SCREEN_W, SCREEN_H, "Crown of Embers");
     SetExitKey(KEY_NULL);
     SetTargetFPS(60);
-    SetWindowMinSize(SCREEN_W / 2, SCREEN_H / 2);
+    SetWindowMinSize(MAP_W * TILE / 2, SCREEN_H / 2);
 
     // Open as large as the monitor comfortably allows. Screenshots default to 1x so they stay comparable.
     int monitor = GetCurrentMonitor();
@@ -57,7 +60,9 @@ int main(int argc, char** argv) {
     {
         // Scoped so the Game (and its textures and sounds) is destroyed before the window closes.
         Game game(autoplay, chapter);
+        if (hidePanel) game.hidePanel();
         int frame = 0;
+        int viewW = game.viewWidth();
         while (!WindowShouldClose()) {
             float dt = GetFrameTime();
             if (dt > 0.05f) dt = 0.05f;
@@ -68,11 +73,19 @@ int main(int argc, char** argv) {
             for (int g = 0; g < 4; ++g) toggle |= IsGamepadAvailable(g) && IsGamepadButtonPressed(g, GAMEPAD_BUTTON_MIDDLE_LEFT);
             if (toggle) ToggleBorderlessWindowed();
 
-            // The game draws in fixed SCREEN_W x SCREEN_H coordinates; scale that to fit the window and
+            // Hiding/showing the side panel changes the view width; in a window, resize to match at the same scale.
+            if (game.viewWidth() != viewW) {
+                float s = std::min(GetScreenWidth() / static_cast<float>(viewW), GetScreenHeight() / static_cast<float>(SCREEN_H));
+                viewW = game.viewWidth();
+                if (!IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) && !IsWindowFullscreen() && !IsWindowMaximized())
+                    SetWindowSize(static_cast<int>(viewW * s), GetScreenHeight());
+            }
+
+            // The game draws in fixed viewW x SCREEN_H coordinates; scale that to fit the window and
             // letterbox the rest. Mouse input is mapped back into game coordinates.
-            float scale = std::min(GetScreenWidth() / static_cast<float>(SCREEN_W),
+            float scale = std::min(GetScreenWidth() / static_cast<float>(viewW),
                                    GetScreenHeight() / static_cast<float>(SCREEN_H));
-            float ox = std::floor((GetScreenWidth() - SCREEN_W * scale) / 2);
+            float ox = std::floor((GetScreenWidth() - viewW * scale) / 2);
             float oy = std::floor((GetScreenHeight() - SCREEN_H * scale) / 2);
             SetMouseOffset(static_cast<int>(-ox), static_cast<int>(-oy));
             SetMouseScale(1 / scale, 1 / scale);
@@ -84,6 +97,12 @@ int main(int argc, char** argv) {
             rlScalef(scale, scale, 1);
             game.draw();
             rlPopMatrix();
+            // Mask the letterbox so nothing drawn outside the view (e.g. battle-scene hills) shows in the bars.
+            int vx1 = static_cast<int>(ox + viewW * scale), vy1 = static_cast<int>(oy + SCREEN_H * scale);
+            DrawRectangle(0, 0, static_cast<int>(ox), GetScreenHeight(), BLACK);
+            DrawRectangle(vx1, 0, GetScreenWidth() - vx1, GetScreenHeight(), BLACK);
+            DrawRectangle(0, 0, GetScreenWidth(), static_cast<int>(oy), BLACK);
+            DrawRectangle(0, vy1, GetScreenWidth(), GetScreenHeight() - vy1, BLACK);
             ++frame;
             bool shoot = battleShot >= 0 ? game.battleClock() >= battleShot : frame == shotFrame;
             if (shotPath && shoot) {

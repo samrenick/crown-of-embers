@@ -1,0 +1,9 @@
+# cell width, height, anchor x, feet y (px within a cell)
+cell 102 126 48 125
+idle 1
+walk 2
+# battle ready, lunge, slash, back to ready
+attack 4 2 @0,1,2,0
+dodge 1
+hurt 1
+death 2

@@ -38,6 +38,7 @@ Debug flags:
 | F / F11 | Select | Toggle fullscreen |
 | T | Y (left face button) | Toggle battle scenes |
 | M | | Mute / unmute sound |
+| Tab | | Hide / show the side panel (the forecast still pops up while targeting) |
 | Hold Z | Hold A | Fast-forward a battle scene |
 
 The window opens as large as your screen allows and can be resized; the game scales to fit.
@@ -50,7 +51,7 @@ While moving a unit, pick an enemy in range to walk to the best tile and attack 
 2. **The Ashen City**: an abandoned city cut by a canal. Streets are fast, rubble slows you down but gives cover, and Corvin holds the throne of a ruined cathedral.
 3. **Ember Peak**: roads wind around a mountain whose snowy peaks only fliers can cross. Knights guard the gates of the hill keep where the brigand chief Skarde waits, and enemy pegasus knights swoop straight over the summit.
 
-Survivors carry over between chapters with their levels and EXP. Losing restarts the current chapter.
+Your whole army carries over between chapters with their levels and EXP, and anyone who fell in battle returns for the next one. Losing restarts the current chapter.
 
 ## Mechanics
 
@@ -58,7 +59,7 @@ Survivors carry over between chapters with their levels and EXP. Losing restarts
 - **Combat:** GBA-style formulas, including the weapon triangle (+15 hit, +1 damage), doubling when attack speed is 4+ higher, crits at 3x damage, and terrain defense and avoid. Hit rolls average two random numbers (the "true hit" system).
 - **Effective weapons:** bows deal triple might against fliers; the Rapier deals triple might against armored and cavalry units.
 - **Rescue:** after moving, choose **Rescue** from the action menu to pick up an adjacent ally. The carrier fights at half Skill and Speed, and the carried unit can't be targeted. Use **Drop** from the action menu to set them down on an adjacent tile. If the carrier falls, the carried unit is dropped where it stood.
-- **Healing:** staff healing, plus forts and the throne restore HP at the start of each phase.
+- **Healing:** staff healing (healers can target themselves), plus forts and the throne restore HP at the start of each phase.
 - **Progression:** EXP and level ups with per-stat growth rates. Death is permanent; the game is lost if Rowan dies.
 - **Enemy AI:** Charge, InRange, or Hold behavior. Attacks are scored by expected damage, kill chance, and counter risk.
 

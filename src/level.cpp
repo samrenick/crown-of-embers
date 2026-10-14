@@ -14,6 +14,7 @@ const Weapon kIronAxe    {"Iron Axe",     WT::Axe,   8,  75, 0,  10, 1, 1};
 const Weapon kHandAxe    {"Hand Axe",     WT::Axe,   7,  60, 0,  12, 1, 2};
 const Weapon kIronBow    {"Iron Bow",     WT::Bow,   6,  85, 0,  5,  2, 2, bit(MT::Flier)};
 const Weapon kFire       {"Fire",         WT::Tome,  5,  90, 0,  4,  1, 2};
+const Weapon kTwinDaggers{"Twin Daggers", WT::Sword, 4,  95, 15, 2,  1, 1};
 const Weapon kHeal       {"Heal",         WT::Staff, 0,  0,  0,  2,  1, 1};
 
 Unit make(const char* name, const char* cls, Team team, MT mt, int level, int mov,
@@ -48,7 +49,7 @@ std::vector<Unit> startingRoster() {
                      {85, 45, 5, 40, 40, 30, 25, 15}, kIronLance, 0, 0));
     u.push_back(make("Garrick", "Knight", P, MT::Armored, 3, 4, {26, 9, 0, 5, 2, 2, 12, 1},
                      {90, 50, 0, 30, 15, 25, 50, 15}, kIronLance, 0, 0));
-    u.push_back(make("Tess", "Archer", P, MT::Infantry, 2, 5, {18, 6, 0, 8, 7, 4, 3, 2},
+    u.push_back(make("Tobin", "Archer", P, MT::Infantry, 2, 5, {18, 6, 0, 8, 7, 4, 3, 2},
                      {70, 40, 5, 55, 45, 35, 15, 15}, kIronBow, 0, 0));
     u.push_back(make("Elsa", "Mage", P, MT::Infantry, 2, 5, {16, 0, 7, 6, 7, 5, 2, 6},
                      {55, 5, 55, 40, 50, 35, 10, 40}, kFire, 0, 0));
@@ -56,6 +57,8 @@ std::vector<Unit> startingRoster() {
                      {60, 35, 10, 45, 65, 50, 15, 35}, kIronLance, 0, 0));
     u.push_back(make("Nia", "Cleric", P, MT::Infantry, 1, 5, {15, 0, 5, 4, 6, 8, 1, 7},
                      {50, 5, 50, 30, 45, 60, 10, 50}, kHeal, 0, 0));
+    u.push_back(make("Sable", "Thief", P, MT::Infantry, 2, 6, {17, 5, 0, 10, 12, 6, 3, 2},
+                     {65, 35, 5, 55, 65, 50, 15, 25}, kTwinDaggers, 0, 0));
     return u;
 }
 
@@ -78,7 +81,7 @@ Level borderFields() {
         "..............mm",
     });
     lv.objective = "Defeat the boss";
-    lv.starts = {{2, 9}, {1, 8}, {3, 10}, {1, 10}, {4, 9}, {0, 9}, {2, 10}};
+    lv.starts = {{2, 9}, {1, 8}, {3, 10}, {1, 10}, {4, 9}, {0, 9}, {2, 10}, {0, 10}};
 
     const Team E = Team::Enemy;
     const Stats none{};
@@ -127,7 +130,7 @@ Level ashenCity() {
         "....r..=....#...",
     });
     lv.objective = "Defeat the boss";
-    lv.starts = {{2, 9}, {0, 10}, {3, 10}, {1, 10}, {0, 9}, {2, 10}, {3, 9}};
+    lv.starts = {{2, 9}, {0, 10}, {3, 10}, {1, 10}, {0, 9}, {2, 10}, {3, 9}, {0, 8}};
 
     const Team E = Team::Enemy;
     const Stats none{};
@@ -179,7 +182,7 @@ Level emberPeak() {
         "F.f............F",
     });
     lv.objective = "Defeat the boss";
-    lv.starts = {{8, 10}, {9, 10}, {6, 9}, {7, 9}, {8, 9}, {9, 9}, {7, 10}};
+    lv.starts = {{8, 10}, {9, 10}, {6, 9}, {7, 9}, {8, 9}, {9, 9}, {7, 10}, {6, 10}};
 
     const Team E = Team::Enemy;
     const Stats none{};
